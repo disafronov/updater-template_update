@@ -1,6 +1,7 @@
+---
 name: Sync repos from template
 
-on:
+"on":
   schedule:
     - cron: '0 2 * * *'
   workflow_dispatch:
@@ -49,7 +50,7 @@ jobs:
       - name: Read template repository
         id: template
         shell: sh
-        run: echo "template_repo=$(cat template.repo)" >> $GITHUB_OUTPUT
+        run: echo "template_repo=$(cat template.repo)" >> "$GITHUB_OUTPUT"
 
       - name: Checkout template repository
         uses: actions/checkout@v5
@@ -152,20 +153,24 @@ jobs:
           while IFS= read -r raw || [ -n "$raw" ]; do
             path=$(printf '%s' "$raw" | sed 's/^[[:space:]]*//')
             case "$path" in ''|'#'*) continue ;; esac
-            
+
             # Security: prevent path traversal and absolute paths
-            if [[ "$path" == /* ]] || [[ "$path" == *../* ]] || [[ "$path" == ../* ]]; then
-              echo "ERROR: Unsafe path: $path" >&2
-              exit 1
-            fi
-            
+            case "$path" in
+              *../*|/*)
+                echo "ERROR: Unsafe path: $path" >&2
+                exit 1
+                ;;
+            esac
+
             # Additional safety: ensure path resolves within repo
             full_path="repo/$path"
-            if [[ "$(realpath "$full_path" 2>/dev/null)" != "$(realpath "repo" 2>/dev/null)"/* ]]; then
+            repo_path="$(realpath "repo" 2>/dev/null)/"
+            full_resolved="$(realpath "$full_path" 2>/dev/null)"
+            if [ "${full_resolved#"$repo_path"}" = "$full_resolved" ]; then
               echo "ERROR: Path outside repo: $path" >&2
               exit 1
             fi
-            
+
             rm -rfv -- "repo/$path" || true
           done < delete.list
 
